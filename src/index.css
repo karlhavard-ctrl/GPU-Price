@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .scroll-mt-24 {
+    scroll-margin-top: 6rem;
+  }
+}
