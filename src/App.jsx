@@ -1,4 +1,40 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import gpuData from './data/gpu-offerings.json';
+
+const normalizeOfferings = (rawData) => {
+  const offerings = Array.isArray(rawData?.offerings)
+    ? rawData.offerings
+    : Array.isArray(rawData?.gpu_offerings)
+      ? rawData.gpu_offerings
+      : [];
+
+  return offerings.map((item, index) => ({
+    id: item?.id ?? String(index + 1),
+    provider: item?.provider ?? '',
+    type: item?.type ?? 'Neo Cloud',
+    gpu: item?.gpu ?? '',
+    price: Number(item?.price ?? 0),
+    billing: item?.billing ?? item?.['billing: '] ?? 'On-Demand',
+    vram: item?.vram ?? '',
+    notes: item?.notes ?? '',
+    source: item?.source ?? '',
+    date: item?.date ?? '',
+  }));
+};
+
+const normalizeSpecs = (rawData) => {
+  const specs = rawData?.specs ?? rawData?.gpu_spec_data ?? {};
+
+  return Object.entries(specs).reduce((acc, [gpuName, spec]) => {
+    acc[gpuName] = {
+      valScore: Number(spec?.valScore ?? spec?.val_score ?? 0),
+      bandwidth: spec?.bandwidth ?? '',
+      tensor: spec?.tensor ?? '',
+      architecture: spec?.architecture ?? spec?.['architecture: '] ?? 'Other',
+    };
+    return acc;
+  }, {});
+};
 
 // ==========================================
 // 100% NATIVE INLINE HIGH-TECH SVG ICONS
@@ -168,50 +204,8 @@ const Icon = ({ name, className = "h-4 w-4 inline-block" }) => {
   }
 };
 
-const INITIAL_GPU_OFFERINGS = [
-  // H100 SXM5 / PCIe
-  { id: '1', provider: 'Spheron', type: 'Neo Cloud', gpu: 'H100 SXM5', price: 1.03, billing: 'Spot', vram: '80GB', notes: 'HGX 8-way cluster split; lowest recorded spot rate', source: 'Spheron Blog', date: '2026-05' },
-  { id: '2', provider: 'Spheron', type: 'Neo Cloud', gpu: 'H100 SXM5', price: 2.50, billing: 'On-Demand', vram: '80GB', notes: 'HGX 8-way; high availability tier', source: 'Spheron Blog', date: '2026-05' },
-  { id: '3', provider: 'Vast.ai', type: 'Neo Cloud', gpu: 'H100 SXM5', price: 1.47, billing: 'Spot', vram: '80GB', notes: 'Marketplace rate fluctuates based on local power', source: 'GPUs.io', date: '2026-06' },
-  { id: '4', provider: 'RunPod', type: 'Neo Cloud', gpu: 'H100 SXM5', price: 3.29, billing: 'On-Demand', vram: '80GB', notes: 'Secure Cloud SXM; guaranteed persistence', source: 'RunPod pricing', date: '2026-06' },
-  { id: '5', provider: 'AWS (p5)', type: 'Hyperscaler', gpu: 'H100 SXM5', price: 6.88, billing: 'On-Demand', vram: '80GB', notes: 'Standard p5.48xlarge configuration (per-GPU rate)', source: 'AWS calculator', date: '2026-05' },
-  { id: '6', provider: 'Azure (NDv5)', type: 'Hyperscaler', gpu: 'H100 SXM5', price: 12.29, billing: 'On-Demand', vram: '80GB', notes: 'ND96isr H100 v5 instance allocation', source: 'Azure Catalog', date: '2026-05' },
-  { id: '7', provider: 'Google Cloud (A3)', type: 'Hyperscaler', gpu: 'H100 SXM5', price: 10.98, billing: 'On-Demand', vram: '80GB', notes: 'A3 Mega Instance tier pricing standard', source: 'GCP pricing calculator', date: '2026-05' },
-  { id: '8', provider: 'GCP (A3 Spot)', type: 'Hyperscaler', gpu: 'H100 SXM5', price: 3.69, billing: 'Spot', vram: '80GB', notes: 'Preemptible high capacity instances', source: 'GCP pricing list', date: '2026-05' },
-  
-  // H200 SXM (141GB)
-  { id: '9', provider: 'Theta EdgeCloud', type: 'Neo Cloud', gpu: 'H200 SXM', price: 2.49, billing: 'On-Demand', vram: '141GB', notes: 'Cheapest enterprise-grade single H200 node', source: 'GPUs.io Tracker', date: '2026-06' },
-  { id: '10', provider: 'Sesterce Cloud', type: 'Neo Cloud', gpu: 'H200 SXM', price: 2.47, billing: 'On-Demand', vram: '141GB', notes: 'Deployments in European multi-rack clusters', source: 'Sesterce official', date: '2026-06' },
-  { id: '11', provider: 'Jarvislabs', type: 'Neo Cloud', gpu: 'H200 SXM', price: 3.80, billing: 'On-Demand', vram: '141GB', notes: 'Single-unit available without contracts', source: 'Jarvislabs Blog', date: '2026-01' },
-  { id: '12', provider: 'RunPod', type: 'Neo Cloud', gpu: 'H200 SXM', price: 4.39, billing: 'On-Demand', vram: '141GB', notes: 'Extreme memory serving node configuration', source: 'RunPod catalog', date: '2026-06' },
-  { id: '13', provider: 'AWS (p5e)', type: 'Hyperscaler', gpu: 'H200 SXM', price: 4.98, billing: 'Spot', vram: '141GB', notes: 'Estimated preemptible availability', source: 'Spheron analysis', date: '2026-05' },
-  { id: '14', provider: 'Azure (NDv5 H200)', type: 'Hyperscaler', gpu: 'H200 SXM', price: 13.78, billing: 'On-Demand', vram: '141GB', notes: 'ND H200 standard high-performance cloud', source: 'Azure official calculator', date: '2026-01' },
-  { id: '15', provider: 'Oracle Cloud (OCI)', type: 'Hyperscaler', gpu: 'H200 SXM', price: 10.00, billing: 'On-Demand', vram: '141GB', notes: 'Bare metal BM.GPU.H200.8 pricing per-node hour', source: 'OCI official list', date: '2026-01' },
-  
-  // B200 SXM6 (180GB)
-  { id: '16', provider: 'Spheron', type: 'Neo Cloud', gpu: 'B200 SXM6', price: 2.12, billing: 'Spot', vram: '180GB', notes: 'High density spot market pricing', source: 'Spheron pricing index', date: '2026-05' },
-  { id: '17', provider: 'Spheron', type: 'Neo Cloud', gpu: 'B200 SXM6', price: 6.02, billing: 'On-Demand', vram: '180GB', notes: 'Unrestricted premium Blackwell nodes', source: 'Spheron blog', date: '2026-03' },
-  { id: '18', provider: 'Packet.ai', type: 'Neo Cloud', gpu: 'B200 SXM6', price: 3.75, billing: 'On-Demand', vram: '180GB', notes: 'B200 NVL setup with low-latency link', source: 'GetDeploying', date: '2026-06' },
-  { id: '19', provider: 'RunPod', type: 'Neo Cloud', gpu: 'B200 SXM6', price: 5.89, billing: 'On-Demand', vram: '180GB', notes: 'Full secure cloud hosting available now', source: 'RunPod official', date: '2026-06' },
-  { id: '20', provider: 'Lambda Labs', type: 'Neo Cloud', gpu: 'B200 SXM6', price: 6.99, billing: 'On-Demand', vram: '180GB', notes: 'Standard secure tenant; multi-region availability', source: 'Lambda Catalog', date: '2026-06' },
-  { id: '21', provider: 'CoreWeave', type: 'Neo Cloud', gpu: 'B200 SXM6', price: 8.60, billing: 'On-Demand', vram: '180GB', notes: 'Enterprise dedicated tier pricing', source: 'CoreWeave listing', date: '2026-06' },
-  { id: '22', provider: 'AWS (p6-b200)', type: 'Hyperscaler', gpu: 'B200 SXM6', price: 14.24, billing: 'On-Demand', vram: '180GB', notes: 'Standard virtualized Blackwell node (8-GPU split)', source: 'AWS Blog / Spheron', date: '2026-05' },
-  { id: '23', provider: 'Google Cloud (B200)', type: 'Hyperscaler', gpu: 'B200 SXM6', price: 16.11, billing: 'On-Demand', vram: '180GB', notes: 'Ultra density 8-GPU multi-cluster nodes', source: 'GCP catalog', date: '2026-06' },
-  { id: '24', provider: 'Oracle (B200)', type: 'Hyperscaler', gpu: 'B200 SXM6', price: 14.00, billing: 'On-Demand', vram: '180GB', notes: 'Flat bare-metal speed pricing', source: 'Oracle direct quote', date: '2026-06' },
-  
-  // B300 (Blackwell DGX, 192GB)
-  { id: '25', provider: 'Spheron', type: 'Neo Cloud', gpu: 'B300', price: 2.45, billing: 'Spot', vram: '192GB', notes: 'Spot market reservation pricing', source: 'Spheron Blog', date: '2026-05' },
-  { id: '26', provider: 'Spheron', type: 'Neo Cloud', gpu: 'B300', price: 6.80, billing: 'On-Demand', vram: '192GB', notes: 'Premium Blackwell Ultra 192GB VRAM', source: 'Spheron Blog', date: '2026-05' },
-  { id: '27', provider: 'Market Average', type: 'Neo Cloud', gpu: 'B300', price: 7.20, billing: 'On-Demand', vram: '192GB', notes: 'Consolidated average rate across smaller providers', source: 'GPUs.io', date: '2026-06' },
-  { id: '28', provider: 'Hyperscaler Average', type: 'Hyperscaler', gpu: 'B300', price: 15.50, billing: 'On-Demand', vram: '192GB', notes: 'Projected rates for standard multi-rack tiering', source: 'Spheron Forecast', date: '2026-05' },
-];
-
-const GPU_SPEC_DATA = {
-  'H100 SXM5': { valScore: 1.0, bandwidth: '3.3 TB/s', tensor: '989 TFLOPS', architecture: 'NVIDIA Hopper' },
-  'H200 SXM': { valScore: 1.4, bandwidth: '4.8 TB/s', tensor: '989 TFLOPS', architecture: 'NVIDIA Hopper' },
-  'B200 SXM6': { valScore: 2.3, bandwidth: '8.0 TB/s', tensor: '2,250 TFLOPS', architecture: 'NVIDIA Blackwell' },
-  'B300': { valScore: 2.5, bandwidth: '8.0 TB/s', tensor: '2,250 TFLOPS', architecture: 'NVIDIA Blackwell' },
-};
+const INITIAL_GPU_OFFERINGS = normalizeOfferings(gpuData);
+const GPU_SPEC_DATA = normalizeSpecs(gpuData);
 
 export default function App() {
   const [offerings, setOfferings] = useState(INITIAL_GPU_OFFERINGS);
